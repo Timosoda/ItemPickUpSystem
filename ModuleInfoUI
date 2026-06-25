@@ -1,0 +1,59 @@
+--services--
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
+
+--UI--
+local MainGUI = script.Parent.Parent
+
+local MainFrame = MainGUI.MainFrame
+
+local MainItemFrame = MainFrame.MainItemFrame
+
+local InfoFrame = MainItemFrame.InfoFrame
+
+--Variable--
+local IsShowingInfo = false
+local typewriterTween
+
+local module = {}
+
+module.ShowInfo = function(object : Part?)
+	if IsShowingInfo == false then
+		MainItemFrame:TweenPosition(UDim2.new(0,0,.6,0), Enum.EasingDirection.InOut, Enum.EasingStyle.Sine, .4, true, nil)
+		IsShowingInfo = true
+	end
+	
+	InfoFrame.ItemNameLabel.Text = object.Name
+	
+	if object:GetAttribute("Desc") then
+		InfoFrame.ItemInfoLabel.Text = object:GetAttribute("Desc")
+	else
+		InfoFrame.ItemInfoLabel.Text = "Not Set"
+	end
+	
+	if typewriterTween then
+		typewriterTween:Cancel()
+	end
+	
+	InfoFrame.ItemInfoLabel.MaxVisibleGraphemes = 0
+	
+	typewriterTween = TweenService:Create(
+		InfoFrame.ItemInfoLabel,
+		TweenInfo.new(.05 * string.len(InfoFrame.ItemInfoLabel.Text),
+			Enum.EasingStyle.Linear,
+			Enum.EasingDirection.InOut,
+			0,
+			false,
+			0
+		),
+		{MaxVisibleGraphemes = string.len(InfoFrame.ItemInfoLabel.Text)}
+	)
+	typewriterTween:Play()
+end
+
+module.HideInfo = function()
+	MainItemFrame:TweenPosition(UDim2.new(0,0,.8,0), Enum.EasingDirection.InOut, Enum.EasingStyle.Sine, .4, true, nil)
+	IsShowingInfo = false
+end
+
+return module
