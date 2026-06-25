@@ -1,0 +1,265 @@
+--Services--
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+
+--Player
+local Player = game.Players.LocalPlayer
+
+local mouse = Player:GetMouse()
+
+--ReplicatedStorage--
+local EventFolder = ReplicatedStorage:WaitForChild("Event")
+local PlayerStatsFodler = ReplicatedStorage:WaitForChild("PlayerStats")
+local GameGraphicFolder = ReplicatedStorage:WaitForChild("GameGraphicFolder")
+
+--GameGraphicFolder--
+local UIFolder = GameGraphicFolder:WaitForChild("UI")
+
+--PlayerStatFolder--
+local PlayerFolder = PlayerStatsFodler:WaitForChild(Player.UserId, 5)
+
+local MaxHandValue = PlayerFolder:WaitForChild("MaxHands")
+local InventoryFolder = PlayerFolder:WaitForChild("InventoryFolder")
+
+--UI base--
+local MainGUI = script.Parent
+
+local MainFrame = MainGUI.MainFrame
+
+local MainItemFrame = MainFrame.MainItemFrame
+
+local InventoryFrame = MainItemFrame.InventoryFrame
+local InfoFrame = MainItemFrame.InfoFrame
+
+local ItemNameLabel = InfoFrame.ItemNameLabel
+local ItemInfoLabel = InfoFrame.ItemInfoLabel
+
+local currentSelectedButton : TextButton = nil
+local tween  : Tween
+
+--game Variable--
+local numbertostring = {
+	[1] = "One";
+	[2] = "Two";
+	[3] = "Three";
+	[4] = "Four";
+	[5] = "Five";
+	[6] = "Six";
+	[7] = "Seven";
+	[8] = "Eight";
+	[9] = "Nine";
+}
+
+local stringtonumber = {
+	["One"] = 1;
+	["Two"] = 2;
+	["Three"] = 3;
+	["Four"] = 4;
+	["Five"] = 5;
+	["Six"] = 6;
+	["Seven"] = 7;
+	["Eight"] = 8;
+	["Nine"] = 9;
+}
+
+local pressingButton = {}
+
+local destroyingevent = {}
+
+local maxlenght = 50
+
+local InfoUIModuleScript = require(script:WaitForChild("InfoUIModule"))
+
+--Functions--
+
+
+local function Raycast(part0 : Part?, part1: Part?)
+	if part0 and part1 then
+		local ray = workspace:Raycast(part0.Position, part0.Position - part1.Position, nil)
+		print(ray.Distance)
+		if ray and ray.Distance <= 50 then
+			return true
+		end
+	end
+	return false
+end
+
+local function ChangeState(Number : number?)
+	
+	local prevObject = currentSelectedButton.CurrentItem.Value
+	
+	if currentSelectedButton then
+		TweenService:Create(
+			currentSelectedButton.UIStroke,
+			TweenInfo.new(.2),
+			{Color = Color3.fromRGB(0, 0, 0)}
+		):Play()
+	end
+
+	currentSelectedButton = InventoryFrame:FindFirstChild(Number).MainFrame
+	currentSelectedButton:TweenPosition(UDim2.new(0.5,0,.45,0), Enum.EasingDirection.InOut, Enum.EasingStyle.Sine, .05, true, function()
+		currentSelectedButton:TweenPosition(UDim2.new(.5,0,.5,0), Enum.EasingDirection.InOut, Enum.EasingStyle.Sine, .05, true, nil)
+	end)
+	EventFolder:WaitForChild("ChangeItem"):FireServer(currentSelectedButton.CurrentItem.Value, prevObject)
+	if currentSelectedButton.CurrentItem.Value then
+		InfoUIModuleScript.ShowInfo(currentSelectedButton.CurrentItem.Value)
+	else
+		InfoUIModuleScript.HideInfo()
+	end
+	if tween then
+		tween:Cancel()
+	end
+
+	tween = TweenService:Create(
+		currentSelectedButton.UIStroke,
+		TweenInfo.new(.2),
+		{Color = Color3.fromRGB(108, 255, 108)}
+	)
+	tween:Play()
+end
+
+local function AddToPressingButtonTable(Button : string?)
+	
+	local presetTable = {KeyCode = Enum.KeyCode[Button]}
+	table.insert(pressingButton, presetTable)
+	
+	print(pressingButton)
+end
+
+local function UpdateInventoryFrame()
+	for i=1, MaxHandValue.Value do
+		if InventoryFrame:FindFirstChild(i) then
+			continue
+		end
+		
+		local ClonedUI = UIFolder:FindFirstChild("TemplateItemSlot"):Clone()
+		ClonedUI.Parent = InventoryFrame
+		ClonedUI.Name = i
+		ClonedUI.LayoutOrder = i
+		ClonedUI.MainFrame.ItemNumber.Text = i
+		if i == 1 then
+			currentSelectedButton = ClonedUI.MainFrame
+			tween = TweenService:Create(
+				currentSelectedButton.UIStroke,
+				TweenInfo.new(.1),
+				{Color = Color3.fromRGB(108, 255, 108)}
+			):Play()
+			
+		end
+		AddToPressingButtonTable(numbertostring[i])
+		
+		ClonedUI.MouseButton1Click:Connect(function()
+			ChangeState(i)
+		end)
+	end
+end
+
+local function DropItem(button : TextButton)
+	
+	if button and button.CurrentItem.Value ~= nil then
+		local returnfunction = EventFolder:WaitForChild("ChangeItemState"):InvokeServer(button.CurrentItem.Value, {}, false)
+		
+		if returnfunction then
+			
+			if destroyingevent[button.CurrentItem.Value] then
+				destroyingevent[button.CurrentItem.Value]:Disconnect()
+				
+				destroyingevent[button.CurrentItem.Value] = nil
+				print(destroyingevent, table.find(destroyingevent, button.CurrentItem.Value))
+			end
+			
+			button.ViewportFrame.WorldModel:FindFirstChild(button.CurrentItem.Value.Name):Destroy()
+			button.CurrentItem.Value = nil
+			
+			InfoUIModuleScript.HideInfo()
+		end
+		
+	end
+end
+
+local function MouseClick()
+
+	if mouse.Target and mouse.Target:FindFirstAncestor("Grabables") and mouse.Target:GetAttribute("CurrentOwner") == "" and currentSelectedButton.CurrentItem.Value == nil then
+		
+		local Part = mouse.Target
+		local ReturnFunction = EventFolder:WaitForChild("ChangeItemState"):InvokeServer(mouse.Target, {currentSelectedButton.Parent.Name}, true)
+		
+		if ReturnFunction then
+			local clonedPart = Part:Clone()
+			print(currentSelectedButton.ViewportFrame.WorldModel:GetChildren())
+			clonedPart.Parent = currentSelectedButton.ViewportFrame.WorldModel
+			clonedPart.CFrame = currentSelectedButton.ViewportFrame.WorldModel.PivotPart.CFrame * CFrame.new(0,0,-clonedPart.Size.Y/2)
+			
+			TweenService:Create(
+				clonedPart,
+				TweenInfo.new(.15,
+					Enum.EasingStyle.Sine,
+					Enum.EasingDirection.InOut,
+					0,
+					true,
+					0
+				),
+				{Position = clonedPart.Position + Vector3.new(0,.2,0)}
+			):Play()
+			
+			InfoUIModuleScript.ShowInfo(Part)
+			
+			task.spawn(function()
+				for i=1, 3 do
+					local tween = TweenService:Create(
+						clonedPart,
+						TweenInfo.new(.075, 
+							Enum.EasingStyle.Linear, 
+							Enum.EasingDirection.InOut, 
+							0, 
+							false, 
+							0),
+						{CFrame = clonedPart.CFrame * CFrame.Angles(0,math.rad(120),0)}
+					)
+
+					tween:Play()
+					tween.Completed:Wait()
+				end
+			end)
+			
+			currentSelectedButton.CurrentItem.Value = Part
+			destroyingevent[Part] = Part.Destroying:Connect(function()
+				DropItem(currentSelectedButton)
+			end)
+			
+		end
+		
+	end
+end
+
+local function ExternalRemoval(currentbuttonName : string)
+	DropItem(InventoryFrame:FindFirstChild(currentbuttonName).MainFrame)
+end
+
+
+--Connect Functions--
+
+
+UserInputService.InputBegan:Connect(function(Input, GPE)
+	for i, v in ipairs(pressingButton) do
+		if Input.KeyCode == v.KeyCode then
+			print("Pressed Da BUTTON")
+			ChangeState(stringtonumber[Input.KeyCode.Name])
+		end
+	end
+	if Input.UserInputType == Enum.UserInputType.MouseButton1 then
+		MouseClick()
+	elseif Input.KeyCode == Enum.KeyCode.Backspace then
+		DropItem(currentSelectedButton)
+	end
+end)
+
+MaxHandValue.Changed:Connect(function(val)
+	print("A")
+	UpdateInventoryFrame()
+end)
+
+EventFolder:WaitForChild("RemoveItemEvent").OnClientEvent:Connect(ExternalRemoval)
+
+task.spawn(UpdateInventoryFrame)
